@@ -81,8 +81,13 @@ except RequestException as error:
 # Convert the JSON response into Python data
 data = response.json()
 
-# Get only the products list
-products = data["products"]
+# Get the products list from the API response
+products = data.get("products", [])
+
+# Make sure products were actually returned
+if not products:
+    logging.error("API returned no products.")
+    raise SystemExit(1)
 
 logging.info("API data successfully extracted.")
 
@@ -92,6 +97,24 @@ logging.info("API data successfully extracted.")
 
 # Turn the product list into a pandas DataFrame
 df = pd.DataFrame(products)
+
+required_columns = {
+    "id",
+    "title",
+    "price",
+    "category",
+    "stock"
+}
+
+missing_columns = required_columns - set(df.columns)
+
+if missing_columns:
+    logging.error(
+        f"Missing required columns: {missing_columns}"
+    )
+    raise SystemExit(1)
+
+
 
 # Keep only the columns we want
 df = df[
@@ -112,6 +135,32 @@ df = df.rename(
 )
 
 logging.info(f"{len(df)} products successfully transformed.")
+
+# --------------------------------------------------
+# DATA QUALITY CHECKS
+# --------------------------------------------------
+
+if df["product_id"].isnull().any():
+    logging.error("Null product IDs found.")
+    raise SystemExit(1)
+
+if df["product_id"].duplicated().any():
+    logging.error("Duplicate product IDs found.")
+    raise SystemExit(1)
+
+if df["price"].isnull().any():
+    logging.error("Null prices found.")
+    raise SystemExit(1)
+
+if (df["price"] < 0).any():
+    logging.error("Negative prices found.")
+    raise SystemExit(1)
+
+if (df["stock"] < 0).any():
+    logging.error("Negative stock values found.")
+    raise SystemExit(1)
+
+logging.info("Data quality checks passed.")
 
 try:
 
